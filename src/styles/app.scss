@@ -7,5 +7,9 @@ body {
 }
 
 #app {
-
+  main {
+    > section {
+      border-bottom: 1px solid white;
+    }
+  }
 }

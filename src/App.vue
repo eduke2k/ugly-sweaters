@@ -4,7 +4,12 @@
   </header>
 
   <main>
-    Some content
+    <section class="uploads">
+
+    </section>
+    <section class="rendering">
+
+    </section>
   </main>
 </template>
 
@@ -12,6 +17,6 @@
 </script>
 
 
-<style>
+<style lang="scss">
 @import './styles/app.scss';
 </style>
