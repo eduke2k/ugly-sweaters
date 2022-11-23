@@ -10,6 +10,7 @@
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
   },
   "dependencies": {
+    "@fontsource/margarine": "^4.5.9",
     "@primer/css": "^20.7.1",
     "@vtmn/css-utilities": "^0.4.4",
     "pinia": "^2.0.25",

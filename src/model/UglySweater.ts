@@ -22,7 +22,7 @@ export class UglySweater {
   private renderProps?: RenderProps;
   private store = useStore();
 
-  private maxAllowedPixels = 20000;
+  private maxAllowedPixels = 30000;
 
   public init(canvas: HTMLCanvasElement): void {
     this.canvas = canvas;
