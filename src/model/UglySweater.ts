@@ -1,9 +1,13 @@
+import { useStore } from '@/store';
+import type { Store } from 'pinia';
+
 export type RenderProps = {
   foregroundUrl: string;
-  backgroundUrl: string;
   knitImageUrl: string;
   knitXGap: number;
   knitYGap: number;
+  backgroundColorEnabled: boolean;
+  backgroundColor: string;
 };
 
 export class UglySweater {
@@ -13,10 +17,12 @@ export class UglySweater {
   private bufferCanvas = document.createElement('canvas');
 
   private foregroundImage?: MarvinImage;
-  private backgroundImage?: MarvinImage;
   private knitImage?: MarvinImage;
 
   private renderProps?: RenderProps;
+  private store = useStore();
+
+  private maxAllowedPixels = 20000;
 
   public init(canvas: HTMLCanvasElement): void {
     this.canvas = canvas;
@@ -25,35 +31,46 @@ export class UglySweater {
     this.ctx = ctx;
   }
 
+  public getMaxAllowedPixels (): number {
+    return this.maxAllowedPixels;
+  }
+
   public render(payload: RenderProps): void {
     this.renderProps = payload;
     const foreGroundImage = new MarvinImage();
     foreGroundImage.load(payload.foregroundUrl, () => {
       this.foregroundImage = foreGroundImage;
-      this.generateResult();
-    });
 
-    const backgroundImage = new MarvinImage();
-    backgroundImage.load(payload.backgroundUrl, () => {
-      this.backgroundImage = backgroundImage;
-      this.generateResult();
-    });
+      console.log(this.foregroundImage.width, this.foregroundImage.height);
+      const density = this.foregroundImage.width * this.foregroundImage.height;
+      if (density > this.maxAllowedPixels) {
+        window.alert(`Your pixel art may not exceed ${this.maxAllowedPixels} pixels in total. It currently has ${density} pixels`);
+        return;
+      }
 
-    const knitImage = new MarvinImage();
-    knitImage.load(payload.knitImageUrl, () => {
-      this.knitImage = knitImage;
-      this.generateResult();
+      const knitImage = new MarvinImage();
+      knitImage.load(payload.knitImageUrl, () => {
+        this.knitImage = knitImage;
+        this.generateResult();
+      });
     });
+    // this.store.setBusy(false);
+  }
+
+  public downloadOutput (): void {
+    if (!this.canvas) return;
+
+    const link = document.createElement('a');
+    link.download = 'download.png';
+    link.href = this.canvas.toDataURL();
+    link.click();
   }
 
   private generateResult() {
-    if (!this.foregroundImage || !this.backgroundImage || !this.knitImage || !this.canvas || !this.ctx || !this.renderProps) return;
+    if (!this.foregroundImage || !this.knitImage || !this.canvas || !this.ctx || !this.renderProps) return;
 
     const knitOffsetX = (this.knitImage.width - (this.knitImage.width - this.renderProps.knitXGap));
     const knitOffsetY = (this.knitImage.height - (this.knitImage.height - this.renderProps.knitYGap));
-
-    console.log('knitOffsetX', knitOffsetX);
-    console.log('knitOffsetY', knitOffsetY);
 
     const canvasWidth = (this.foregroundImage.width * knitOffsetX) + this.knitImage.width - knitOffsetX;
     const canvasHeight = (this.foregroundImage.height * knitOffsetY)  + this.knitImage.height - knitOffsetY;
@@ -65,6 +82,11 @@ export class UglySweater {
     this.bufferCanvas.height = this.knitImage.height;
     const bufferContext = this.bufferCanvas.getContext("2d");
     if (!bufferContext) throw new Error("Missing 2d rendering context on canvas");
+
+    if (this.renderProps.backgroundColorEnabled) {
+      this.ctx.fillStyle = `${this.renderProps.backgroundColor}`;
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);  
+    }
 
     for(let y = 0; y < this.foregroundImage.height; y++) {
       for(let x = 0; x < this.foregroundImage.width; x++) {
@@ -85,7 +107,6 @@ export class UglySweater {
         bufferContext.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
         const vary = 128 + ((Math.random() - 0.5) * 50);
-        console.log(vary);
         bufferContext.globalCompositeOperation = 'soft-light';
         bufferContext.fillStyle = `rgb(${vary}, ${vary}, ${vary})`;
         bufferContext.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
@@ -94,6 +115,7 @@ export class UglySweater {
         bufferContext.drawImage(this.knitImage.image, 0, 0);
 
         this.ctx.drawImage(this.bufferCanvas, x * knitOffsetX, y * knitOffsetY);
+        this.store.setFinished(true);
       }
     }
   }
