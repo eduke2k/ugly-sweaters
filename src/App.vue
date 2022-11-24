@@ -16,7 +16,10 @@
           <p class="info">Each individual pixel of your selected image will be used to generate the ugly sweater pattern. Images containing more than {{ maxAllowedPixels }}px in total will not work to avoid performance issues.</p>
         </div>
         <div class="background-container">
-          <h2>Step 2: Output background</h2>
+          <h2>Step 2: Texture settings</h2>
+          <div class="mb-4">
+            <Dropdown class="dropdown" v-model="selectedTextureType" :options="textureTypeOptions" optionValue="value" optionLabel="name" placeholder="Select a texture type" />
+          </div>
           <div class="mb-2">
             <input id="colorInputCheckbox" type="checkbox" @change="handleCheckboxChange" ref="colorInputCheckbox" />
             <label for="colorInputCheckbox">Enable fixed background color</label>
@@ -62,9 +65,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { onMounted, ref } from "vue";
-
+import Dropdown from 'primevue/dropdown';
 import ImageSelect from "./components/ImageSelect.vue";
-import { UglySweater } from "./model/UglySweater";
+import { textureConfigs, UglySweater, type TextureType } from "./model/UglySweater";
 import { useStore } from "./store";
 
 export type InputEventTarget = EventTarget & { value: string };
@@ -78,6 +81,11 @@ const colorInputCheckbox = ref<HTMLInputElement>();
 const generator = new UglySweater();
 const backgroundColor = ref('#000000');
 const backgroundColorEnabled = ref(false);
+const selectedTextureType = ref<TextureType>('knitted');
+const textureTypeOptions = textureConfigs.map(t => ({
+  name: t.label,
+  value: t.type
+}));
 
 onMounted(() => {
   if (canvas.value) {
@@ -106,11 +114,9 @@ const handleRenderClick = (): void => {
 
   generator.render({
     foregroundUrl: foregroundFileUrl.value,
-    knitImageUrl: "/knit2.png",
-    knitXGap: 48,
-    knitYGap: 39,
     backgroundColorEnabled: backgroundColorEnabled.value,
     backgroundColor: backgroundColor.value,
+    textureType: selectedTextureType.value
   });
 };
 
@@ -303,7 +309,8 @@ p {
           text-align: center;
         }
 
-        .color-input {
+        .color-input,
+        .dropdown {
           width: 100%;
         }
 

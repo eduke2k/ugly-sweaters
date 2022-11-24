@@ -1,14 +1,50 @@
+import { getRandomItem } from '@/functions';
 import { useStore } from '@/store';
-import type { Store } from 'pinia';
+
+export type TextureType = 'knitted' | 'cross-stitched';
+export type TextureConfig = {
+  label: string;
+  type: TextureType;
+  knitImageUrls: string[];
+  knitBackgroundUrls?: string[];
+  knitXGap: number;
+  knitYGap: number;
+  skipWhite: boolean;
+  globalCompositeOperation: GlobalCompositeOperation;
+}
 
 export type RenderProps = {
   foregroundUrl: string;
-  knitImageUrl: string;
-  knitXGap: number;
-  knitYGap: number;
   backgroundColorEnabled: boolean;
   backgroundColor: string;
+  textureType: TextureType
 };
+
+export const textureConfigs: TextureConfig[] = [
+  {
+    label: 'Knitted (Default)',
+    type: 'knitted',
+    knitImageUrls: ["/textures/knitted/knit01.png"],
+    knitXGap: 0,
+    knitYGap: -30,
+    skipWhite: false,
+    globalCompositeOperation: 'multiply'
+  },
+  {
+    label: 'Cross Stitch',
+    type: 'cross-stitched',
+    knitImageUrls: [
+      "/textures/cross-stitched/stitch01.png",
+      "/textures/cross-stitched/stitch02.png",
+      "/textures/cross-stitched/stitch03.png"
+    ],
+    knitBackgroundUrls: ["/textures/cross-stitched/bg01.jpg"],
+    knitXGap: -29,
+    knitYGap: -29,
+    skipWhite: true,
+    globalCompositeOperation: 'overlay'
+  }
+];
 
 export class UglySweater {
   private canvas?: HTMLCanvasElement;
@@ -17,7 +53,8 @@ export class UglySweater {
   private bufferCanvas = document.createElement('canvas');
 
   private foregroundImage?: MarvinImage;
-  private knitImage?: MarvinImage;
+  private knitImages?: MarvinImage[];
+  private knitBackgroundImages?: MarvinImage[];
 
   private renderProps?: RenderProps;
   private store = useStore();
@@ -35,26 +72,58 @@ export class UglySweater {
     return this.maxAllowedPixels;
   }
 
-  public render(payload: RenderProps): void {
-    this.renderProps = payload;
-    const foreGroundImage = new MarvinImage();
-    foreGroundImage.load(payload.foregroundUrl, () => {
-      this.foregroundImage = foreGroundImage;
+  private loadImage (url: string): Promise<MarvinImage> {
+    return new Promise ((resolve) => {
+      const image = new MarvinImage();
+      image.load(url, () => {
+        resolve(image);
+      });
+    });
+  }
 
-      console.log(this.foregroundImage.width, this.foregroundImage.height);
+  private loadImages (urls: string[]): Promise<MarvinImage[]> {
+    const promises = urls.map(u => this.loadImage(u));
+    return Promise.all(promises);
+  }
+
+  private reset (): void {
+    this.knitBackgroundImages = undefined;
+    this.knitImages = undefined;
+    this.foregroundImage = undefined;
+  }
+
+
+  public async render(payload: RenderProps): Promise<void> {
+    this.reset();
+    this.renderProps = payload;
+
+    const textureConfig = textureConfigs.find(t => t.type === payload.textureType);
+    if (!textureConfig) throw new Error(`Could not find texture type for corresponding texture type '${payload.textureType}'`);
+
+    const promises = [
+      this.loadImage(payload.foregroundUrl),
+      this.loadImages(textureConfig.knitImageUrls)
+    ];
+
+    if (textureConfig.knitBackgroundUrls) {
+      promises.push(this.loadImages(textureConfig.knitBackgroundUrls));
+    }
+
+    const results = await Promise.all(promises);
+    
+    if (results[0] && !Array.isArray(results[0])) this.foregroundImage = results[0];
+    if (results[1] && Array.isArray(results[1])) this.knitImages = results[1];
+    if (results[2] && Array.isArray(results[2])) this.knitBackgroundImages = results[2];
+
+    if (this.foregroundImage) {
       const density = this.foregroundImage.width * this.foregroundImage.height;
       if (density > this.maxAllowedPixels) {
         window.alert(`Your pixel art may not exceed ${this.maxAllowedPixels} pixels in total. It currently has ${density} pixels`);
         return;
       }
+    }
 
-      const knitImage = new MarvinImage();
-      knitImage.load(payload.knitImageUrl, () => {
-        this.knitImage = knitImage;
-        this.generateResult();
-      });
-    });
-    // this.store.setBusy(false);
+    this.generateResult(textureConfig);
   }
 
   public downloadOutput (): void {
@@ -66,26 +135,37 @@ export class UglySweater {
     link.click();
   }
 
-  private generateResult() {
-    if (!this.foregroundImage || !this.knitImage || !this.canvas || !this.ctx || !this.renderProps) return;
+  private generateResult(textureConfig: TextureConfig) {
+    if (!this.foregroundImage || !this.knitImages || !this.canvas || !this.ctx || !this.renderProps) return;
 
-    const knitOffsetX = (this.knitImage.width - (this.knitImage.width - this.renderProps.knitXGap));
-    const knitOffsetY = (this.knitImage.height - (this.knitImage.height - this.renderProps.knitYGap));
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    const canvasWidth = (this.foregroundImage.width * knitOffsetX) + this.knitImage.width - knitOffsetX;
-    const canvasHeight = (this.foregroundImage.height * knitOffsetY)  + this.knitImage.height - knitOffsetY;
+    const knitOffsetX = (this.knitImages[0].width + (textureConfig.knitXGap));
+    const knitOffsetY = (this.knitImages[0].height + (textureConfig.knitYGap));
+
+    const canvasWidth = (this.foregroundImage.width * knitOffsetX) + this.knitImages[0].width - knitOffsetX;
+    const canvasHeight = (this.foregroundImage.height * knitOffsetY)  + this.knitImages[0].height - knitOffsetY;
     this.canvas.width = canvasWidth;
     this.canvas.height = canvasHeight;
 
     // Setup buffer
-    this.bufferCanvas.width = this.knitImage.width;
-    this.bufferCanvas.height = this.knitImage.height;
+    this.bufferCanvas.width = this.knitImages[0].width;
+    this.bufferCanvas.height = this.knitImages[0].height;
     const bufferContext = this.bufferCanvas.getContext("2d");
     if (!bufferContext) throw new Error("Missing 2d rendering context on canvas");
 
     if (this.renderProps.backgroundColorEnabled) {
       this.ctx.fillStyle = `${this.renderProps.backgroundColor}`;
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);  
+    }
+
+    if (this.knitBackgroundImages) {
+      for(let y = 0; y < this.foregroundImage.height; y++) {
+        for(let x = 0; x < this.foregroundImage.width; x++) {
+          const random = getRandomItem(this.knitBackgroundImages);
+          this.ctx.drawImage(random.image, x * random.image.width, y * random.image.height);
+        }
+      }
     }
 
     for(let y = 0; y < this.foregroundImage.height; y++) {
@@ -98,23 +178,29 @@ export class UglySweater {
         const blue = this.foregroundImage.getIntComponent2(x,actualY);
         // const alpha = this.foregroundImage.getAlphaComponent(x,actualY);
 
-        // Create colored knit in buffer
-        bufferContext.clearRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
-        bufferContext.globalCompositeOperation = 'source-over';
-        bufferContext.drawImage(this.knitImage.image, 0, 0);
-        bufferContext.globalCompositeOperation = 'multiply';
-        bufferContext.fillStyle = `rgb(${red}, ${green}, ${blue})`;
-        bufferContext.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
+        const isWhite = (red === 255 && green === 255 && blue === 255);
 
-        const vary = 128 + ((Math.random() - 0.5) * 50);
-        bufferContext.globalCompositeOperation = 'soft-light';
-        bufferContext.fillStyle = `rgb(${vary}, ${vary}, ${vary})`;
-        bufferContext.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
+        if (!textureConfig.skipWhite || !isWhite) {
+          const random = getRandomItem(this.knitImages);
 
-        bufferContext.globalCompositeOperation = 'destination-in';
-        bufferContext.drawImage(this.knitImage.image, 0, 0);
+          // Create colored knit in buffer
+          bufferContext.clearRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
+          bufferContext.globalCompositeOperation = 'source-over';
+          bufferContext.drawImage(random.image, 0, 0);
+          bufferContext.globalCompositeOperation = textureConfig.globalCompositeOperation;
+          bufferContext.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+          bufferContext.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
 
-        this.ctx.drawImage(this.bufferCanvas, x * knitOffsetX, y * knitOffsetY);
+          const vary = 128 + ((Math.random() - 0.5) * 50);
+          bufferContext.globalCompositeOperation = 'soft-light';
+          bufferContext.fillStyle = `rgb(${vary}, ${vary}, ${vary})`;
+          bufferContext.fillRect(0, 0, this.bufferCanvas.width, this.bufferCanvas.height);
+
+          bufferContext.globalCompositeOperation = 'destination-in';
+          bufferContext.drawImage(random.image, 0, 0);
+          this.ctx.drawImage(this.bufferCanvas, x * knitOffsetX, y * knitOffsetY);
+        }
+
         this.store.setFinished(true);
       }
     }
