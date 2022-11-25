@@ -1,6 +1,7 @@
 import { getRandomItem } from '@/functions';
 import { useStore } from '@/store';
 
+export type ImageOutputType = 'png' | 'jpg';
 export type TextureType = 'knitted' | 'cross-stitched';
 export type TextureConfig = {
   label: string;
@@ -126,13 +127,28 @@ export class UglySweater {
     this.generateResult(textureConfig);
   }
 
-  public downloadOutput (): void {
+  public downloadOutput (imageType: ImageOutputType): void {
     if (!this.canvas) return;
 
     const link = document.createElement('a');
-    link.download = 'download.png';
-    link.href = this.canvas.toDataURL();
+    link.download = `download.${this.getImageExtension(imageType)}`;
+    console.log(imageType, this.getImageOutputType(imageType));
+    link.href = this.canvas.toDataURL(this.getImageOutputType(imageType), 0.8);
     link.click();
+  }
+
+  private getImageExtension(imageType: ImageOutputType): string {
+    switch (imageType) {
+      case 'png': return 'png';
+      default: return 'jpg';
+    }
+  }
+
+  private getImageOutputType(imageType: ImageOutputType): string {
+    switch (imageType) {
+      case 'png': return 'image/png';
+      default: return 'image/jpeg';
+    }
   }
 
   private generateResult(textureConfig: TextureConfig) {

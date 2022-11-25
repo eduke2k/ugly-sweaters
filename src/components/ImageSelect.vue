@@ -1,9 +1,12 @@
 <template>
   <div class="image-select">
-    <div class="preview-container" v-if="fileUrl" >
-      <img :src="fileUrl" />
+    <div class="preview-container" v-bind:class="{ filled: !!fileUrl }">
+      <div class="ar"></div>
+      <div class="btn-container">
+        <a class="btn" @click="input?.click">{{ action }} pixel art...</a>
+      </div>
+      <img v-if="fileUrl" :src="fileUrl" />
     </div>
-    <a class="btn" @click="input?.click">{{ action }} pixel art...</a>
     <input ref="input" class="input" type="file" accept="image/*" @change="handleInputChange" />
   </div>
 </template>
@@ -34,17 +37,54 @@ const action = computed(() => {
   width: 100%;
   box-sizing: border-box;
 
-  .btn {
-    margin-bottom: 16px;
-  }
-
   .preview-container {
-    display: flex;
-    flex-direction: column;
+    position: relative;
     background-color: black;
     padding: 4px;
     border-radius: 4px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
+    width: 100%;
+
+    .ar {
+      padding-top: 100%;
+    }
+
+    .btn-container {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 100%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 5;
+    }
+
+    img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      z-index: 4;
+    }
+
+    &.filled {
+      .btn-container {
+        .btn {
+          opacity: 0;
+        }
+      }
+
+      &:hover {
+        .btn-container {
+          .btn {
+            opacity: 1;
+          }
+        }
+      }
+    }
   }
 
   .input {

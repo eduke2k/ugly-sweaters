@@ -16,16 +16,21 @@
           <p class="info">Each individual pixel of your selected image will be used to generate the ugly sweater pattern. Images containing more than {{ maxAllowedPixels }}px in total will not work to avoid performance issues.</p>
         </div>
         <div class="background-container">
-          <h2>Step 2: Texture settings</h2>
+          <h2>Step 2: Output settings</h2>
           <div class="mb-4">
+            <label class="dropdown-label">Texture Settings</label>
             <Dropdown class="dropdown" v-model="selectedTextureType" :options="textureTypeOptions" optionValue="value" optionLabel="name" placeholder="Select a texture type" />
           </div>
-          <div class="mb-2">
+          <div class="mb-4">
             <input id="colorInputCheckbox" type="checkbox" @change="handleCheckboxChange" ref="colorInputCheckbox" />
             <label for="colorInputCheckbox">Enable fixed background color</label>
+            <input type="color" @change="handleColorChange" ref="colorInput" value="#000000" class="color-input mb-2" v-show="!colorInputDisabled" />
+            <p class="info">You can choose a fixed background color for your output image or leave it transparent if you like to give it a final touch yourself</p>
           </div>
-          <input type="color" @change="handleColorChange" ref="colorInput" value="#000000" class="color-input mb-2" v-show="!colorInputDisabled" />
-          <p class="info">You can choose a fixed background color for your output image or leave it transparent if you like to give it a final touch yourself</p>
+          <!-- <div>
+            <label class="dropdown-label">Target image format</label>
+            <Dropdown label class="dropdown" v-model="selectedOutputType" :options="outputTypeOptions" optionValue="value" optionLabel="name" placeholder="Select an output type" />
+          </div> -->
         </div>
       </div>
 
@@ -42,7 +47,11 @@
     </section>
     <section class="rendering mb-2" v-show="store.isFinished">
       <h2>Your ugly sweater is ready!</h2>
-      <div class="btn mb-4" @click="downloadOutput">Download</div>
+      <p class="subtitle">Image resolution: {{ canvas?.width }} x {{ canvas?.height }} px</p>
+      <div class="download-actions mb-4">
+        <div class="btn mb-4" @click="downloadOutput('png')">Download (PNG)</div>
+        <div class="btn mb-4" @click="downloadOutput('jpg')">Download (JPG)</div>
+      </div>
       <canvas ref="canvas" />
     </section>
   </main>
@@ -67,7 +76,7 @@ import { computed } from "vue";
 import { onMounted, ref } from "vue";
 import Dropdown from 'primevue/dropdown';
 import ImageSelect from "./components/ImageSelect.vue";
-import { textureConfigs, UglySweater, type TextureType } from "./model/UglySweater";
+import { textureConfigs, UglySweater, type ImageOutputType, type TextureType } from "./model/UglySweater";
 import { useStore } from "./store";
 
 export type InputEventTarget = EventTarget & { value: string };
@@ -130,8 +139,8 @@ const handleCheckboxChange = (event: Event): void => {
   backgroundColorEnabled.value = target.checked;
 };
 
-const downloadOutput = (): void => {
-  generator.downloadOutput();
+const downloadOutput = (outputOption: ImageOutputType): void => {
+  generator.downloadOutput(outputOption);
 };
 
 </script>
@@ -279,6 +288,28 @@ p {
     justify-content: center;
     align-items: center;
 
+    h2 {
+      margin: 0;
+    }
+
+    .subtitle {
+      margin: 0;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .download-actions {
+      display: flex;
+
+      > * {
+        margin-right: 8px;
+
+        &:last-child {
+          margin-right: 0;
+        }
+      }
+    }
+
     canvas {
       max-width: 100%;
       max-height: 500px;
@@ -309,13 +340,21 @@ p {
           text-align: center;
         }
 
+        .dropdown-label {
+          text-transform: uppercase;
+          font-weight: bold;
+          font-size: 13px;
+          letter-spacing: 2px;
+          color: #7e7e7e;
+        }
+
         .color-input,
         .dropdown {
           width: 100%;
         }
 
         &:hover {
-          background-color: #292929;
+          background-color: #1f1f1f;
         }
       }
     }
