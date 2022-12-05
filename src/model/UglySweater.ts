@@ -192,11 +192,12 @@ export class UglySweater {
         const red = this.foregroundImage.getIntComponent0(x,actualY);
         const green = this.foregroundImage.getIntComponent1(x,actualY);
         const blue = this.foregroundImage.getIntComponent2(x,actualY);
-        // const alpha = this.foregroundImage.getAlphaComponent(x,actualY);
+        const alpha = this.foregroundImage.getAlphaComponent(x,actualY);
 
         const isWhite = (red === 255 && green === 255 && blue === 255);
+        const isTransparent = alpha === 0;
 
-        if (!textureConfig.skipWhite || !isWhite) {
+        if ((!textureConfig.skipWhite || !isWhite) && !isTransparent) {
           const random = getRandomItem(this.knitImages);
 
           // Create colored knit in buffer
