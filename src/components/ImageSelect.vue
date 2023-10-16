@@ -7,6 +7,7 @@
       </div>
       <img v-if="fileUrl" :src="fileUrl" />
     </div>
+    <p class="mb-3">Size: {{ imageWidth }} x {{ imageHeight }} px</p>
     <input ref="input" class="input" type="file" accept="image/*" @change="handleInputChange" />
   </div>
 </template>
@@ -15,14 +16,38 @@
 import { computed, ref } from "vue";
 export type FileEventTarget = EventTarget & { files: FileList };
 
+export type ForegroundFile = {
+  fileUrl: string;
+  type: 'image' | 'gif';
+  width: number;
+  height: number;
+}
+
 const emit = defineEmits(["update:modelValue"]);
 const input = ref<HTMLInputElement>();
+const imageWidth = ref(0);
+const imageHeight = ref(0);
 
 const fileUrl = ref("");
 const handleInputChange = (event: Event): void => {
   const target = event.target as FileEventTarget;
   fileUrl.value = URL.createObjectURL(target.files[0]);
-  emit("update:modelValue", fileUrl.value);
+
+  const type = target.files[0].type === 'image/gif' ? 'gif' : 'image';
+
+  const img = new Image();
+  img.onload = () => {
+    imageWidth.value = img.width;
+    imageHeight.value = img.height;
+
+    emit("update:modelValue", {
+      type,
+      fileUrl: fileUrl.value,
+      width: imageWidth.value,
+      height: imageHeight.value
+    } as ForegroundFile);
+  };
+  img.src = fileUrl.value;
 };
 
 const action = computed(() => {

@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia';
 
 type State = {
-  /** The currently selected layout */
+  imageType: 'image' | 'gif'
   busy: boolean;
   finished: boolean;
 }
 
 export const useStore = defineStore('main', {
   state: (): State => ({
+    imageType: 'image',
     busy: false,
     finished: false,
   }),
@@ -25,6 +26,9 @@ export const useStore = defineStore('main', {
     },
     setFinished (val: boolean): void {
       this.finished = val;
+    },
+    setImageType (val: 'image' | 'gif'): void {
+      this.imageType = val;
     }
   }
 });

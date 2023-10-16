@@ -11,21 +11,80 @@
       <div class="action-containers mb-4">
         <div class="upload-container">
           <h2>Step 1: Choose Pixel Art</h2>
-          <ImageSelect title="Foreground" v-model="foregroundFileUrl" />
+          <ImageSelect title="Foreground" v-model="foregroundFile" />
           <!-- <ImageSelect title="Background" v-model="backgroundFileUrl" /> -->
-          <p class="info">Each individual pixel of your selected image will be used to generate the ugly sweater pattern. Images containing more than {{ maxAllowedPixels }}px in total will not work to avoid performance issues.</p>
+          <p class="info">Each individual pixel of your selected image will be used to generate the ugly sweater pattern</p>
+        </div>
+        <div class="scale-container">
+          <h2 class="mb-4">Step 2: Scaling</h2>
+          <div class="mb-10">
+            <p class="text-overline mb-2">Pixel art size</p>
+            <div class="d-flex align-center">
+              <v-text-field
+                v-model="inputWidth"
+                variant="outlined"
+                density="compact"
+                label="Width"
+                class="mr-2"
+                type="number"
+                hide-details
+                @change="handleInputWidthChange"
+                :disabled="!foregroundFile"
+                :step="1"
+              />
+              <span class="mr-2 info text-grey">x</span>
+              <v-text-field
+                v-model="inputHeight"
+                variant="outlined"
+                density="compact"
+                label="Height"
+                type="number"
+                class="mr-2"
+                hide-details
+                @change="handleInputHeightChange"
+                :disabled="!foregroundFile"
+                :step="1"
+              />
+              <span class="info text-grey">px</span>
+            </div>
+          </div>
+          <div>
+            <p class="text-overline mb-2">Rendered image scale</p>
+            <p class="info mb-4">The final rendering size can be enormous depending on the input image size and texture type. Please start with lower rendering scales before trying 100% to not crash your browser!</p>
+            <div class="d-flex align-center">
+              <v-slider color="green" :hint="`${Math.round(renderedScale * 100)}% of original size`" v-model="renderedScale" :min="0.01" :max="1"></v-slider>
+            </div>
+          </div>
         </div>
         <div class="background-container">
-          <h2>Step 2: Output settings</h2>
+          <h2 class="mb-4">Step 3: Ugly style</h2>
           <div class="mb-4">
-            <label class="dropdown-label">Texture Settings</label>
-            <Dropdown class="dropdown" v-model="selectedTextureType" :options="textureTypeOptions" optionValue="value" optionLabel="name" placeholder="Select a texture type" />
+            <v-select
+              label="Select a texture type"
+              density="compact"
+              variant="outlined"
+              :disabled="!foregroundFile"
+              hide-details
+              v-model="selectedTextureType"
+              :items="textureTypeOptions"
+            ></v-select>
+            <!-- <Dropdown class="dropdown" v-model="selectedTextureType" :options="textureTypeOptions" optionValue="value" optionLabel="name" placeholder="Select a texture type" /> -->
           </div>
           <div class="mb-4">
-            <input id="colorInputCheckbox" type="checkbox" @change="handleCheckboxChange" ref="colorInputCheckbox" />
-            <label for="colorInputCheckbox">Enable fixed background color</label>
-            <input type="color" @change="handleColorChange" ref="colorInput" value="#000000" class="color-input mb-2" v-show="!colorInputDisabled" />
-            <p class="info">You can choose a fixed background color for your output image or leave it transparent if you like to give it a final touch yourself</p>
+            <v-checkbox
+              variant="dense"
+              :disabled="!foregroundFile"
+              hide-details
+              v-model="backgroundColorEnabled"
+            >
+              <template v-slot:label>
+                <div class="d-flex align-center">
+                  <input type="color" @change="handleColorChange" ref="colorInput" value="#000000" class="color-input" :disabled="colorInputDisabled" />
+                  <label class="v-label flex-grow-1">Fixed background color</label>
+                </div>
+              </template>
+            </v-checkbox>
+            <p class="info text-left">You can choose a fixed background color for your output image or leave it transparent if you like to give it a final touch yourself</p>
           </div>
           <!-- <div>
             <label class="dropdown-label">Target image format</label>
@@ -49,10 +108,16 @@
       <h2>Your ugly sweater is ready!</h2>
       <p class="subtitle">Image resolution: {{ canvas?.width }} x {{ canvas?.height }} px</p>
       <div class="download-actions mb-4">
-        <div class="btn mb-4" @click="downloadOutput('png')">Download (PNG)</div>
-        <div class="btn mb-4" @click="downloadOutput('jpg')">Download (JPG)</div>
+        <template v-if="isGif">
+          <div class="btn mb-4" @click="downloadOutput('gif')">Download (GIF)</div>
+        </template>
+        <template v-else>
+          <div class="btn mb-4" @click="downloadOutput('png')">Download (PNG)</div>
+          <div class="btn mb-4" @click="downloadOutput('jpg')">Download (JPG)</div>
+        </template>
       </div>
-      <canvas ref="canvas" />
+      <canvas ref="canvas" v-show="!isGif" />
+      <img v-if="isGif && store.isFinished" :src="getGifDownloadUrl()"  />
     </section>
   </main>
   <footer>
@@ -72,10 +137,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { onMounted, ref } from "vue";
-import Dropdown from 'primevue/dropdown';
-import ImageSelect from "./components/ImageSelect.vue";
+import ImageSelect, { type ForegroundFile } from "./components/ImageSelect.vue";
 import { textureConfigs, UglySweater, type ImageOutputType, type TextureType } from "./model/UglySweater";
 import { useStore } from "./store";
 
@@ -83,16 +147,18 @@ export type InputEventTarget = EventTarget & { value: string };
 export type CheckboxEventTarget = EventTarget & { checked: boolean };
 
 const store = useStore();
-const foregroundFileUrl = ref("");
+const foregroundFile = ref<ForegroundFile | null>(null);
 const canvas = ref<HTMLCanvasElement>();
 const colorInput = ref<HTMLInputElement>();
-const colorInputCheckbox = ref<HTMLInputElement>();
 const generator = new UglySweater();
 const backgroundColor = ref('#000000');
 const backgroundColorEnabled = ref(false);
+const inputWidth = ref(1);
+const inputHeight = ref(1);
+const renderedScale = ref(0.25);
 const selectedTextureType = ref<TextureType>('knitted');
 const textureTypeOptions = textureConfigs.map(t => ({
-  name: t.label,
+  title: t.label,
   value: t.type
 }));
 
@@ -102,27 +168,51 @@ onMounted(() => {
   }
 });
 
+watch(foregroundFile, async (newFile) => {
+  if (newFile) {
+    inputWidth.value = newFile.width;
+    inputHeight.value = newFile.height;
+  }
+});
+
 const canRender = computed(() => {
-  return !!foregroundFileUrl.value;
+  return !!foregroundFile.value?.fileUrl;
+});
+
+const inputRatio = computed(() => {
+  return (foregroundFile.value?.width || 1) / (foregroundFile.value?.height || 1);
+});
+
+const isGif = computed(() => {
+  return store.imageType === 'gif';
 });
 
 const colorInputDisabled = computed(() => {
   return !backgroundColorEnabled.value;
 });
 
-const maxAllowedPixels = computed(() => {
-  return generator.getMaxAllowedPixels();
-});
+const handleInputWidthChange = (event: InputEvent): void => {
+  const target = event.target as InputEventTarget;
+  inputHeight.value = Math.round(parseInt(target.value) / inputRatio.value);
+};
 
-// const hasOutput = computed(() => {
-
-// });
+const handleInputHeightChange = (event: InputEvent): void => {
+  const target = event.target as InputEventTarget;
+  inputWidth.value = Math.round(parseInt(target.value) * inputRatio.value);
+};
 
 const handleRenderClick = (): void => {
   if (!canRender.value) return;
+  if (!foregroundFile.value) return;
+
+  store.setFinished(false);
 
   generator.render({
-    foregroundUrl: foregroundFileUrl.value,
+    isGif: foregroundFile.value.type === 'gif',
+    foregroundUrl: foregroundFile.value.fileUrl,
+    foregroundWidth: inputWidth.value,
+    foregroundHeight: inputHeight.value,
+    renderScale: renderedScale.value,
     backgroundColorEnabled: backgroundColorEnabled.value,
     backgroundColor: backgroundColor.value,
     textureType: selectedTextureType.value
@@ -134,20 +224,22 @@ const handleColorChange = (event: Event): void => {
   backgroundColor.value = target?.value ?? '#000000';
 };
 
-const handleCheckboxChange = (event: Event): void => {
-  const target = event.target as CheckboxEventTarget;
-  backgroundColorEnabled.value = target.checked;
-};
+// const handleCheckboxChange = (event: Event): void => {
+//   const target = event.target as CheckboxEventTarget;
+//   backgroundColorEnabled.value = target.checked;
+// };
 
 const downloadOutput = (outputOption: ImageOutputType): void => {
   generator.downloadOutput(outputOption);
 };
 
+const getGifDownloadUrl = (): string => {
+  return generator.getGifDownloadUrl();
+};
+
 </script>
 
 <style lang="scss">
-@import '@primer/css/utilities/index.scss';
-
 @keyframes boing {
   15%, 40%, 75%, 100% {
       transform-origin: center center;
@@ -324,9 +416,9 @@ p {
     
     .action-containers {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       grid-gap: 8px;
-      max-width: 800px;
+      max-width: 1000px;
 
       > * {
         background-color: #191919;
@@ -337,7 +429,6 @@ p {
         .info {
           margin: 0;
           font-size: 12px;
-          text-align: center;
         }
 
         .dropdown-label {
@@ -348,7 +439,12 @@ p {
           color: #7e7e7e;
         }
 
-        .color-input,
+        .color-input {
+          width: 36px;
+          height: 36px;
+          margin-right: 6px;
+        }
+
         .dropdown {
           width: 100%;
         }
